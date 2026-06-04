@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 export const DEFAULT_RESUME_URL =
-  'https://drive.google.com/uc?export=download&id=1OcmCsvv6FO_rkaoBRGthDCloqI9n1j-a'
+  'https://drive.google.com/uc?export=download&id=1Qt3aMThMosWlS9M5ZKwiN-oOX637kvXO'
 
 const GIST_FILE = 'resume-url.txt'
 const GIST_ID_KEY = 'resume_gist_id'

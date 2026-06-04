@@ -1,6 +1,16 @@
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
+import { getResumeUrl } from './ResumeAdmin'
 
 export default function Hero() {
+  const [resumeUrl, setResumeUrl] = useState(getResumeUrl)
+
+  useEffect(() => {
+    const handler = (e) => setResumeUrl(e.detail)
+    window.addEventListener('resume-url-updated', handler)
+    return () => window.removeEventListener('resume-url-updated', handler)
+  }, [])
+
   return (
     <section
       id="home"
@@ -86,7 +96,7 @@ export default function Hero() {
               className="flex flex-wrap gap-4"
             >
               <motion.a
-                href="https://drive.google.com/uc?export=download&id=1OcmCsvv6FO_rkaoBRGthDCloqI9n1j-a"
+                href={resumeUrl}
                 target="_blank"
                 rel="noreferrer"
                 whileHover={{ scale: 1.04, y: -2 }}

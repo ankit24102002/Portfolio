@@ -1,5 +1,6 @@
 import { BrowserRouter } from 'react-router-dom'
 import Navbar from './components/Navbar'
+import ResumeAdmin from './components/ResumeAdmin'
 import Hero from './components/Hero'
 import About from './components/About'
 import SectionBanner from './components/SectionBanner'
@@ -31,10 +32,22 @@ export default function App() {
         >
           <p>
             Designed &amp; Built by{' '}
-            <span className="text-[#00d4ff]">Ankit Singla</span> · 2025
+            <span
+              className="text-[#00d4ff]"
+              id="resume-admin-trigger"
+              style={{ cursor: 'default' }}
+              onClick={() => {
+                const el = document.getElementById('resume-admin-trigger')
+                if (el) el.dispatchEvent(new MouseEvent('click-count', { bubbles: true }))
+              }}
+            >
+              Ankit Singla
+            </span>{' '}
+            · 2025
           </p>
         </footer>
       </div>
+      <ResumeAdmin />
     </BrowserRouter>
   )
 }

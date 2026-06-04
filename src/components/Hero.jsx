@@ -1,11 +1,16 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { getResumeUrl } from './ResumeAdmin'
+import { DEFAULT_RESUME_URL, loadResumeUrl } from './ResumeAdmin'
 
 export default function Hero() {
-  const [resumeUrl, setResumeUrl] = useState(getResumeUrl)
+  const [resumeUrl, setResumeUrl] = useState(
+    () => localStorage.getItem('resume_url_cache') || DEFAULT_RESUME_URL
+  )
 
   useEffect(() => {
+    // Fetch from Gist on every load — updates URL globally across devices
+    loadResumeUrl().then(setResumeUrl)
+    // Also listen for admin panel instant updates
     const handler = (e) => setResumeUrl(e.detail)
     window.addEventListener('resume-url-updated', handler)
     return () => window.removeEventListener('resume-url-updated', handler)

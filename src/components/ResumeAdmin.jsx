@@ -1,42 +1,103 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 export const DEFAULT_RESUME_URL =
   'https://drive.google.com/uc?export=download&id=1OcmCsvv6FO_rkaoBRGthDCloqI9n1j-a'
-const STORAGE_KEY = 'resume_url'
 
-export function getResumeUrl() {
-  try {
-    return localStorage.getItem(STORAGE_KEY) || DEFAULT_RESUME_URL
-  } catch {
-    return DEFAULT_RESUME_URL
-  }
+const GIST_FILE = 'resume-url.txt'
+const GIST_ID_KEY = 'resume_gist_id'
+const GIST_TOKEN_KEY = 'resume_gist_token'
+const CACHE_KEY = 'resume_url_cache'
+
+// Convert Drive share link → direct download
+function normalizeUrl(url) {
+  const trimmed = url.trim()
+  const converted = trimmed.replace(
+    /https?:\/\/drive\.google\.com\/file\/d\/([^/]+)\/.*/,
+    'https://drive.google.com/uc?export=download&id=$1'
+  )
+  return converted.startsWith('http') ? converted : `https://${converted}`
 }
+
+// Fetch URL from public Gist (no auth needed for public gist)
+async function fetchGistUrl(gistId) {
+  const raw = `https://gist.githubusercontent.com/ankit24102002/${gistId}/raw/${GIST_FILE}?t=${Date.now()}`
+  const res = await fetch(raw)
+  if (!res.ok) throw new Error('Gist fetch failed')
+  return (await res.text()).trim()
+}
+
+// Update Gist via GitHub API
+async function updateGist(gistId, token, newUrl) {
+  const res = await fetch(`https://api.github.com/gists/${gistId}`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `token ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ files: { [GIST_FILE]: { content: newUrl } } }),
+  })
+  if (!res.ok) throw new Error(`GitHub API error: ${res.status}`)
+}
+
+// Called by Hero.jsx on mount — returns URL from Gist (global) or cache (local fallback)
+export async function loadResumeUrl() {
+  const gistId = localStorage.getItem(GIST_ID_KEY)
+  if (gistId) {
+    try {
+      const url = await fetchGistUrl(gistId)
+      localStorage.setItem(CACHE_KEY, url) // cache for instant next load
+      return url
+    } catch {
+      // fall through to cache
+    }
+  }
+  return localStorage.getItem(CACHE_KEY) || DEFAULT_RESUME_URL
+}
+
+// ─────────────────────────────────────────────────────────
 
 export default function ResumeAdmin() {
   const [isOpen, setIsOpen] = useState(false)
-  const [input, setInput] = useState('')
-  const [current, setCurrent] = useState(DEFAULT_RESUME_URL)
-  const [status, setStatus] = useState(null) // 'saved' | 'reset'
-  const [clickCount, setClickCount] = useState(0)
+  const [tab, setTab] = useState('update') // 'update' | 'setup'
 
-  // Load current on open
+  // Update tab state
+  const [newUrl, setNewUrl] = useState('')
+  const [currentUrl, setCurrentUrl] = useState(DEFAULT_RESUME_URL)
+  const [updateStatus, setUpdateStatus] = useState(null) // null | 'saving' | 'saved' | 'error'
+  const [updateError, setUpdateError] = useState('')
+
+  // Setup tab state
+  const [gistId, setGistId] = useState('')
+  const [gistToken, setGistToken] = useState('')
+  const [setupStatus, setSetupStatus] = useState(null) // null | 'testing' | 'ok' | 'error'
+
+  const isConfigured = !!localStorage.getItem(GIST_ID_KEY)
+
+  const refreshCurrentUrl = useCallback(async () => {
+    const url = await loadResumeUrl()
+    setCurrentUrl(url)
+    setNewUrl(url)
+  }, [])
+
   useEffect(() => {
     if (isOpen) {
-      const url = getResumeUrl()
-      setCurrent(url)
-      setInput(url)
-      setStatus(null)
+      setGistId(localStorage.getItem(GIST_ID_KEY) || '')
+      setGistToken(localStorage.getItem(GIST_TOKEN_KEY) || '')
+      setTab(isConfigured ? 'update' : 'setup')
+      setUpdateStatus(null)
+      setSetupStatus(null)
+      refreshCurrentUrl()
     }
-  }, [isOpen])
+  }, [isOpen, isConfigured, refreshCurrentUrl])
 
-  // Keyboard shortcut: Shift + Alt + R  (open-only, debounced)
+  // Keyboard shortcut: Shift + Alt + R (open-only, debounced)
   useEffect(() => {
     let lastFired = 0
     const handleKey = (e) => {
       if (e.shiftKey && e.altKey && e.key.toLowerCase() === 'r') {
         const now = Date.now()
-        if (now - lastFired > 600) {   // ignore duplicate fires within 600ms
+        if (now - lastFired > 600) {
           lastFired = now
           setIsOpen(true)
         }
@@ -47,172 +108,245 @@ export default function ResumeAdmin() {
     return () => window.removeEventListener('keydown', handleKey)
   }, [])
 
-  // Secret click trigger: click footer text 7 times within 3 seconds
-  useEffect(() => {
-    if (clickCount >= 7) {
-      setIsOpen(true)
-      setClickCount(0)
+  // ── Setup: test & save credentials ──
+  const handleSetupSave = async () => {
+    if (!gistId.trim() || !gistToken.trim()) return
+    setSetupStatus('testing')
+    try {
+      const url = await fetchGistUrl(gistId.trim())
+      localStorage.setItem(GIST_ID_KEY, gistId.trim())
+      localStorage.setItem(GIST_TOKEN_KEY, gistToken.trim())
+      localStorage.setItem(CACHE_KEY, url)
+      setCurrentUrl(url)
+      setNewUrl(url)
+      setSetupStatus('ok')
+      setTimeout(() => setTab('update'), 1200)
+    } catch {
+      setSetupStatus('error')
     }
-    if (clickCount > 0) {
-      const timer = setTimeout(() => setClickCount(0), 3000)
-      return () => clearTimeout(timer)
-    }
-  }, [clickCount])
-
-  const handleSave = () => {
-    const trimmed = input.trim()
-    if (!trimmed) return
-    // Convert Drive share link to direct download if needed
-    const converted = trimmed.replace(
-      /drive\.google\.com\/file\/d\/([^/]+)\/.*/,
-      'drive.google.com/uc?export=download&id=$1'
-    )
-    const finalUrl = converted.startsWith('http') ? converted : `https://${converted}`
-    localStorage.setItem(STORAGE_KEY, finalUrl)
-    setCurrent(finalUrl)
-    setStatus('saved')
-    // Dispatch event so Hero updates without page reload
-    window.dispatchEvent(new CustomEvent('resume-url-updated', { detail: finalUrl }))
-    setTimeout(() => setIsOpen(false), 1600)
   }
 
-  const handleReset = () => {
-    localStorage.removeItem(STORAGE_KEY)
-    setCurrent(DEFAULT_RESUME_URL)
-    setInput(DEFAULT_RESUME_URL)
-    setStatus('reset')
-    window.dispatchEvent(new CustomEvent('resume-url-updated', { detail: DEFAULT_RESUME_URL }))
+  // ── Update: save new URL to Gist ──
+  const handleUpdate = async () => {
+    const final = normalizeUrl(newUrl)
+    const storedGistId = localStorage.getItem(GIST_ID_KEY)
+    const storedToken = localStorage.getItem(GIST_TOKEN_KEY)
+
+    setUpdateStatus('saving')
+    setUpdateError('')
+    try {
+      if (storedGistId && storedToken) {
+        await updateGist(storedGistId, storedToken, final)
+      }
+      localStorage.setItem(CACHE_KEY, final)
+      setCurrentUrl(final)
+      window.dispatchEvent(new CustomEvent('resume-url-updated', { detail: final }))
+      setUpdateStatus('saved')
+      setTimeout(() => setIsOpen(false), 1600)
+    } catch (err) {
+      setUpdateStatus('error')
+      setUpdateError(err.message)
+    }
   }
 
   return (
-    <>
-      {/* Invisible footer trigger area */}
-      <span
-        id="resume-admin-trigger"
-        onClick={() => setClickCount((c) => c + 1)}
-        style={{ cursor: 'default', userSelect: 'none' }}
-      />
-
-      <AnimatePresence>
-        {isOpen && (
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.88)', backdropFilter: 'blur(10px)' }}
+          onClick={() => setIsOpen(false)}
+        >
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-[100] flex items-center justify-center p-4"
-            style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(10px)' }}
-            onClick={() => setIsOpen(false)}
+            initial={{ scale: 0.9, y: 20, opacity: 0 }}
+            animate={{ scale: 1, y: 0, opacity: 1 }}
+            exit={{ scale: 0.92, y: 10, opacity: 0 }}
+            transition={{ duration: 0.25, type: 'spring', stiffness: 200, damping: 22 }}
+            className="w-full max-w-lg rounded-2xl overflow-hidden"
+            style={{
+              background: '#0d1220',
+              border: '1px solid rgba(0,212,255,0.25)',
+              boxShadow: '0 32px 80px rgba(0,0,0,0.7)',
+            }}
+            onClick={(e) => e.stopPropagation()}
           >
-            <motion.div
-              initial={{ scale: 0.9, y: 20, opacity: 0 }}
-              animate={{ scale: 1, y: 0, opacity: 1 }}
-              exit={{ scale: 0.92, y: 10, opacity: 0 }}
-              transition={{ duration: 0.25, type: 'spring', stiffness: 200, damping: 22 }}
-              className="w-full max-w-lg rounded-2xl p-6"
-              style={{
-                background: '#0d1220',
-                border: '1px solid rgba(0,212,255,0.3)',
-                boxShadow: '0 32px 80px rgba(0,0,0,0.6), 0 0 60px rgba(0,212,255,0.08)',
-              }}
-              onClick={(e) => e.stopPropagation()}
+            {/* Header */}
+            <div
+              className="flex items-center justify-between px-6 py-4 border-b"
+              style={{ borderColor: 'rgba(0,212,255,0.15)' }}
             >
-              {/* Header */}
-              <div className="flex items-center justify-between mb-5">
-                <div>
-                  <h3 className="text-white font-bold text-lg">Update Resume</h3>
-                  <p className="text-gray-500 text-xs mt-0.5">Changes apply instantly without redeploying</p>
-                </div>
+              <div>
+                <h3 className="text-white font-bold">Resume Manager</h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {isConfigured ? '🌐 Synced via GitHub Gist — updates work on all devices' : '⚠️ Not configured — changes are local only'}
+                </p>
+              </div>
+              <button
+                onClick={() => setIsOpen(false)}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-white transition-colors"
+                style={{ background: 'rgba(255,255,255,0.05)' }}
+              >✕</button>
+            </div>
+
+            {/* Tabs */}
+            <div className="flex border-b" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+              {['update', 'setup'].map((t) => (
                 <button
-                  onClick={() => setIsOpen(false)}
-                  className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-white transition-colors"
-                  style={{ background: 'rgba(255,255,255,0.05)' }}
-                >
-                  ✕
-                </button>
-              </div>
-
-              {/* Current URL */}
-              <div className="mb-4">
-                <label className="text-gray-400 text-xs uppercase tracking-wider mb-1.5 block">
-                  Current Download URL
-                </label>
-                <div
-                  className="p-3 rounded-xl font-mono text-xs text-gray-500 break-all"
-                  style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}
-                >
-                  {current}
-                </div>
-              </div>
-
-              {/* Input */}
-              <div className="mb-2">
-                <label className="text-gray-400 text-xs uppercase tracking-wider mb-1.5 block">
-                  New URL
-                </label>
-                <textarea
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder="Paste Google Drive share link or direct download URL..."
-                  rows={3}
-                  autoFocus
-                  className="w-full font-mono text-xs text-white placeholder-gray-600 rounded-xl px-3 py-2.5 resize-none focus:outline-none transition-colors"
-                  style={{
-                    background: 'rgba(0,0,0,0.3)',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                  }}
-                  onFocus={(e) => { e.target.style.borderColor = 'rgba(0,212,255,0.4)' }}
-                  onBlur={(e) => { e.target.style.borderColor = 'rgba(255,255,255,0.1)' }}
-                />
-              </div>
-
-              {/* Drive tip */}
-              <div
-                className="p-3 rounded-xl mb-4 text-xs text-gray-500"
-                style={{ background: 'rgba(0,212,255,0.04)', border: '1px solid rgba(0,212,255,0.1)' }}
-              >
-                <span className="text-[#00d4ff] font-semibold">Tip:</span> Share link is auto-converted.
-                Just paste your Drive share URL as-is —{' '}
-                <span className="text-gray-400">drive.google.com/file/d/ID/view</span>{' '}
-                becomes a direct download automatically.
-              </div>
-
-              {/* Buttons */}
-              <div className="flex gap-3">
-                <motion.button
-                  onClick={handleSave}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className="flex-1 py-2.5 rounded-xl font-bold text-sm transition-all duration-300"
+                  key={t}
+                  onClick={() => setTab(t)}
+                  className="flex-1 py-2.5 text-sm font-semibold capitalize transition-all"
                   style={
-                    status === 'saved'
-                      ? { background: '#10b981', color: 'white' }
-                      : { background: 'linear-gradient(90deg, #00d4ff, #0099bb)', color: '#06080f' }
+                    tab === t
+                      ? { color: '#00d4ff', borderBottom: '2px solid #00d4ff' }
+                      : { color: 'rgba(156,163,175,1)' }
                   }
                 >
-                  {status === 'saved' ? '✓ Saved!' : 'Save & Apply'}
-                </motion.button>
-                <motion.button
-                  onClick={handleReset}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className="px-4 py-2.5 rounded-xl font-bold text-sm text-gray-400 transition-colors"
-                  style={{ border: '1px solid rgba(255,255,255,0.1)' }}
-                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(251,146,60,0.4)'; e.currentTarget.style.color = '#fb923c' }}
-                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'; e.currentTarget.style.color = 'rgb(156,163,175)' }}
-                >
-                  {status === 'reset' ? '✓ Reset' : 'Reset Default'}
-                </motion.button>
-              </div>
+                  {t === 'update' ? '📄 Update URL' : '⚙️ Setup Gist'}
+                </button>
+              ))}
+            </div>
 
-              {/* Secret hint */}
-              <p className="text-center text-gray-700 text-xs mt-4">
-                🔑 Shortcut: <span className="text-gray-600 font-mono">Shift + Alt + R</span>
-              </p>
-            </motion.div>
+            <div className="p-6">
+              {/* ── UPDATE TAB ── */}
+              {tab === 'update' && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-gray-400 text-xs uppercase tracking-wider mb-1.5 block">Current URL</label>
+                    <div
+                      className="p-2.5 rounded-xl font-mono text-xs text-gray-500 break-all"
+                      style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}
+                    >
+                      {currentUrl}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-gray-400 text-xs uppercase tracking-wider mb-1.5 block">New Download URL</label>
+                    <textarea
+                      value={newUrl}
+                      onChange={(e) => setNewUrl(e.target.value)}
+                      placeholder="Paste Google Drive share or download link..."
+                      rows={3}
+                      autoFocus
+                      className="w-full font-mono text-xs text-white placeholder-gray-600 rounded-xl px-3 py-2.5 resize-none focus:outline-none"
+                      style={{
+                        background: 'rgba(0,0,0,0.3)',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        transition: 'border-color 0.2s',
+                      }}
+                      onFocus={(e) => { e.target.style.borderColor = 'rgba(0,212,255,0.4)' }}
+                      onBlur={(e) => { e.target.style.borderColor = 'rgba(255,255,255,0.1)' }}
+                    />
+                    <p className="text-gray-600 text-xs mt-1">
+                      Share links are auto-converted to direct download format
+                    </p>
+                  </div>
+
+                  {updateStatus === 'error' && (
+                    <p className="text-red-400 text-xs">{updateError || 'Update failed. Check your Gist config.'}</p>
+                  )}
+
+                  {!isConfigured && (
+                    <p className="text-amber-500 text-xs">
+                      ⚠️ Gist not configured — changes will only apply on this device. Go to Setup tab to enable cross-device sync.
+                    </p>
+                  )}
+
+                  <motion.button
+                    onClick={handleUpdate}
+                    disabled={updateStatus === 'saving'}
+                    whileHover={{ scale: 1.01 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="w-full py-3 rounded-xl font-bold text-sm transition-all duration-300 disabled:opacity-60"
+                    style={
+                      updateStatus === 'saved'
+                        ? { background: '#10b981', color: 'white' }
+                        : { background: 'linear-gradient(90deg, #00d4ff, #0099bb)', color: '#06080f' }
+                    }
+                  >
+                    {updateStatus === 'saving' ? 'Saving...' : updateStatus === 'saved' ? '✓ Saved — all devices updated!' : 'Save & Apply Everywhere'}
+                  </motion.button>
+                </div>
+              )}
+
+              {/* ── SETUP TAB ── */}
+              {tab === 'setup' && (
+                <div className="space-y-4">
+                  <div
+                    className="p-3 rounded-xl text-xs text-gray-400 space-y-1"
+                    style={{ background: 'rgba(0,212,255,0.05)', border: '1px solid rgba(0,212,255,0.12)' }}
+                  >
+                    <p className="text-[#00d4ff] font-semibold mb-2">One-time setup (2 min):</p>
+                    <p>1. Go to <span className="text-white font-mono">gist.github.com</span> → New Gist</p>
+                    <p>2. Filename: <span className="text-white font-mono">resume-url.txt</span> → paste your Drive URL → Create <strong>public</strong> gist</p>
+                    <p>3. Copy the Gist ID (long hash in the URL)</p>
+                    <p>4. GitHub → Settings → Developer → Tokens (classic) → tick <span className="text-white">gist</span> only → generate</p>
+                  </div>
+
+                  <div>
+                    <label className="text-gray-400 text-xs uppercase tracking-wider mb-1.5 block">Gist ID</label>
+                    <input
+                      type="text"
+                      value={gistId}
+                      onChange={(e) => setGistId(e.target.value)}
+                      placeholder="e.g. a1b2c3d4e5f6..."
+                      className="w-full font-mono text-sm text-white placeholder-gray-600 rounded-xl px-3 py-2.5 focus:outline-none"
+                      style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)' }}
+                      onFocus={(e) => { e.target.style.borderColor = 'rgba(0,212,255,0.4)' }}
+                      onBlur={(e) => { e.target.style.borderColor = 'rgba(255,255,255,0.1)' }}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-gray-400 text-xs uppercase tracking-wider mb-1.5 block">GitHub Token (gist scope only)</label>
+                    <input
+                      type="password"
+                      value={gistToken}
+                      onChange={(e) => setGistToken(e.target.value)}
+                      placeholder="ghp_xxxxxxxxxxxx"
+                      className="w-full font-mono text-sm text-white placeholder-gray-600 rounded-xl px-3 py-2.5 focus:outline-none"
+                      style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)' }}
+                      onFocus={(e) => { e.target.style.borderColor = 'rgba(0,212,255,0.4)' }}
+                      onBlur={(e) => { e.target.style.borderColor = 'rgba(255,255,255,0.1)' }}
+                    />
+                    <p className="text-gray-600 text-xs mt-1">Stored locally on this device only. Only needed for updating.</p>
+                  </div>
+
+                  {setupStatus === 'error' && (
+                    <p className="text-red-400 text-xs">Could not connect to Gist. Check the ID and try again.</p>
+                  )}
+
+                  <motion.button
+                    onClick={handleSetupSave}
+                    disabled={setupStatus === 'testing'}
+                    whileHover={{ scale: 1.01 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="w-full py-3 rounded-xl font-bold text-sm disabled:opacity-60 transition-all"
+                    style={
+                      setupStatus === 'ok'
+                        ? { background: '#10b981', color: 'white' }
+                        : { background: 'linear-gradient(90deg, #00d4ff, #0099bb)', color: '#06080f' }
+                    }
+                  >
+                    {setupStatus === 'testing' ? 'Testing connection...' : setupStatus === 'ok' ? '✓ Connected!' : 'Test & Save'}
+                  </motion.button>
+                </div>
+              )}
+            </div>
+
+            <div
+              className="px-6 py-3 text-center text-gray-700 text-xs border-t"
+              style={{ borderColor: 'rgba(255,255,255,0.05)' }}
+            >
+              🔑 <span className="font-mono">Shift + Alt + R</span> to open · <span className="font-mono">Esc</span> to close
+            </div>
           </motion.div>
-        )}
-      </AnimatePresence>
-    </>
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }

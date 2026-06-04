@@ -30,11 +30,16 @@ export default function ResumeAdmin() {
     }
   }, [isOpen])
 
-  // Keyboard shortcut: Shift + Alt + R
+  // Keyboard shortcut: Shift + Alt + R  (open-only, debounced)
   useEffect(() => {
+    let lastFired = 0
     const handleKey = (e) => {
       if (e.shiftKey && e.altKey && e.key.toLowerCase() === 'r') {
-        setIsOpen((prev) => !prev)
+        const now = Date.now()
+        if (now - lastFired > 600) {   // ignore duplicate fires within 600ms
+          lastFired = now
+          setIsOpen(true)
+        }
       }
       if (e.key === 'Escape') setIsOpen(false)
     }

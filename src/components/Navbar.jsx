@@ -23,8 +23,8 @@ export default function Navbar() {
   }, [])
 
   useEffect(() => {
-    const sectionIds = navLinks.map((l) => l.href.slice(1))
-    const observers = sectionIds.map((id) => {
+    const ids = navLinks.map((l) => l.href.slice(1))
+    const observers = ids.map((id) => {
       const el = document.getElementById(id)
       if (!el) return null
       const obs = new IntersectionObserver(
@@ -42,38 +42,57 @@ export default function Navbar() {
       initial={{ y: -80, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.6 }}
-      className={`fixed top-0 w-full z-50 transition-all duration-300 ${
+      className="fixed top-0 w-full z-50 transition-all duration-300"
+      style={
         scrolled
-          ? 'bg-[#0a0f1e]/90 backdrop-blur-md shadow-xl shadow-black/30 border-b border-white/5'
-          : 'bg-transparent'
-      }`}
+          ? {
+              background: 'rgba(6,8,15,0.92)',
+              backdropFilter: 'blur(16px)',
+              borderBottom: '1px solid rgba(255,255,255,0.05)',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+            }
+          : { background: 'transparent' }
+      }
     >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto px-5 lg:px-10">
         <div className="flex items-center justify-between h-16">
-          <motion.a
-            href="#home"
-            whileHover={{ scale: 1.05 }}
-            className="flex items-center gap-2"
-          >
-            <div className="w-8 h-8 rounded-lg bg-[#00d4ff] flex items-center justify-center">
-              <span className="text-[#0a0f1e] font-bold text-sm">AS</span>
+          {/* Logo */}
+          <motion.a href="#home" whileHover={{ scale: 1.05 }} className="flex items-center gap-2.5">
+            <div
+              className="w-8 h-8 rounded-lg flex items-center justify-center"
+              style={{ background: 'linear-gradient(135deg, #00d4ff, #0066aa)' }}
+            >
+              <span className="text-[#06080f] font-black text-xs">A</span>
             </div>
-            <span className="hidden sm:block text-white font-semibold text-sm">
+            <span className="hidden sm:block text-white font-semibold text-sm tracking-wide">
               Ankit Singla
             </span>
           </motion.a>
 
-          {/* Desktop nav */}
+          {/* Desktop links */}
           <div className="hidden md:flex items-center gap-1">
             {navLinks.map((link) => (
               <a
                 key={link.href}
                 href={link.href}
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                className="px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200"
+                style={
                   activeSection === link.href.slice(1)
-                    ? 'text-[#00d4ff] bg-[#00d4ff]/10'
-                    : 'text-gray-400 hover:text-white hover:bg-white/5'
-                }`}
+                    ? { color: '#00d4ff', background: 'rgba(0,212,255,0.08)' }
+                    : { color: 'rgba(156,163,175,1)' }
+                }
+                onMouseEnter={(e) => {
+                  if (activeSection !== link.href.slice(1)) {
+                    e.target.style.color = 'white'
+                    e.target.style.background = 'rgba(255,255,255,0.05)'
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (activeSection !== link.href.slice(1)) {
+                    e.target.style.color = 'rgba(156,163,175,1)'
+                    e.target.style.background = 'transparent'
+                  }
+                }}
               >
                 {link.label}
               </a>
@@ -83,7 +102,7 @@ export default function Navbar() {
           {/* Mobile hamburger */}
           <button
             onClick={() => setIsOpen(!isOpen)}
-            className="md:hidden p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
+            className="md:hidden p-2 rounded-lg text-gray-400 hover:text-white transition-colors"
             aria-label="Toggle menu"
           >
             <div className="w-5 h-4 flex flex-col justify-between">
@@ -93,8 +112,8 @@ export default function Navbar() {
                 className="block w-full h-0.5 bg-current rounded-full"
               />
               <motion.span
-                animate={isOpen ? { opacity: 0, x: -10 } : { opacity: 1, x: 0 }}
-                transition={{ duration: 0.2 }}
+                animate={isOpen ? { opacity: 0 } : { opacity: 1 }}
+                transition={{ duration: 0.15 }}
                 className="block w-full h-0.5 bg-current rounded-full"
               />
               <motion.span
@@ -115,19 +134,25 @@ export default function Navbar() {
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.25 }}
-            className="md:hidden bg-[#0a0f1e]/95 backdrop-blur-md border-t border-white/5 overflow-hidden"
+            style={{
+              background: 'rgba(6,8,15,0.97)',
+              backdropFilter: 'blur(16px)',
+              borderTop: '1px solid rgba(255,255,255,0.05)',
+              overflow: 'hidden',
+            }}
           >
-            <div className="px-4 py-3 space-y-1">
+            <div className="px-5 py-3 space-y-1">
               {navLinks.map((link) => (
                 <a
                   key={link.href}
                   href={link.href}
                   onClick={() => setIsOpen(false)}
-                  className={`block px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                  className="block px-4 py-2.5 rounded-xl text-sm font-medium transition-all"
+                  style={
                     activeSection === link.href.slice(1)
-                      ? 'text-[#00d4ff] bg-[#00d4ff]/10'
-                      : 'text-gray-400 hover:text-white hover:bg-white/5'
-                  }`}
+                      ? { color: '#00d4ff', background: 'rgba(0,212,255,0.08)' }
+                      : { color: 'rgba(156,163,175,1)' }
+                  }
                 >
                   {link.label}
                 </a>

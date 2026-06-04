@@ -7,37 +7,66 @@ const skillGroups = [
     skills: ['C#', 'SQL', 'Python', 'TypeScript', 'JavaScript'],
   },
   {
-    category: 'Core Concepts',
-    color: '#a78bfa',
-    skills: ['OOP', 'System Design'],
-  },
-  {
     category: 'Backend',
     color: '#34d399',
-    skills: ['ASP.NET Core', 'Web API', 'MVC', 'Microservices'],
+    skills: [
+      'ASP.NET Core', 'Web API', 'MVC', 'Microservices',
+      'Entity Framework Core', 'LINQ', 'SignalR',
+      'Redis', 'RabbitMQ', 'Kafka',
+    ],
   },
   {
     category: 'Databases',
     color: '#fb923c',
-    skills: ['MySQL', 'MongoDB'],
+    skills: ['SQL Server', 'MySQL', 'PostgreSQL', 'MongoDB', 'Oracle'],
   },
   {
     category: 'Cloud & DevOps',
     color: '#f472b6',
-    skills: ['AWS', 'Docker', 'Kubernetes'],
+    skills: [
+      'AWS', 'EC2', 'S3', 'Lambda', 'RDS',
+      'Docker', 'Kubernetes', 'Terraform', 'Helm',
+      'Jenkins', 'CI/CD', 'GitHub Actions', 'SonarQube',
+    ],
   },
   {
     category: 'Frontend',
     color: '#60a5fa',
-    skills: ['Angular', 'React'],
+    skills: [
+      'Angular', 'React', 'HTML5', 'CSS3',
+      'Bootstrap', 'Tailwind CSS', 'Material UI', 'jQuery',
+    ],
+  },
+  {
+    category: 'Testing',
+    color: '#fbbf24',
+    skills: ['Postman', 'Swagger / OpenAPI'],
+  },
+  {
+    category: 'Architecture & Design',
+    color: '#a78bfa',
+    skills: [
+      'OOP', 'SOLID Principles', 'Design Patterns',
+      'Clean Architecture', 'CQRS', 'Event-Driven Architecture',
+      'Domain-Driven Design', 'System Design',
+    ],
+  },
+  {
+    category: 'Tools',
+    color: '#94a3b8',
+    skills: ['Git', 'GitHub', 'Azure DevOps', 'Jira', 'Visual Studio', 'VS Code'],
+  },
+  {
+    category: 'AI & Modern Tech',
+    color: '#c084fc',
+    skills: ['OpenAI API', 'Claude API', 'LangChain', 'RAG', 'Vector Databases', 'AI Agents'],
   },
 ]
 
 export default function Skills() {
   return (
-    <section id="skills" className="py-24 px-4">
+    <section id="skills" className="py-24 px-4" style={{ background: '#080c14' }}>
       <div className="max-w-6xl mx-auto">
-        {/* Section title */}
         <div className="text-center mb-16">
           <motion.h2
             initial={{ opacity: 0, y: 20 }}
@@ -46,7 +75,7 @@ export default function Skills() {
             transition={{ duration: 0.5 }}
             className="text-4xl font-bold text-white mb-3"
           >
-            Skills
+            Technical Skills
           </motion.h2>
           <motion.div
             initial={{ scaleX: 0 }}
@@ -57,7 +86,7 @@ export default function Skills() {
           />
         </div>
 
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {skillGroups.map((group, gi) => (
             <motion.div
               key={group.category}
@@ -65,16 +94,25 @@ export default function Skills() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.45, delay: gi * 0.08 }}
-              whileHover={{ y: -4 }}
-              className="bg-[#0d1a2d] border border-white/5 rounded-2xl p-6 hover:border-white/10 transition-all duration-300"
+              whileHover={{ y: -5 }}
+              className="rounded-2xl p-6 transition-all duration-300"
+              style={{
+                background: 'rgba(255,255,255,0.02)',
+                border: '1px solid rgba(255,255,255,0.06)',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.border = `1px solid ${group.color}30`
+                e.currentTarget.style.boxShadow = `0 16px 40px ${group.color}08`
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.border = '1px solid rgba(255,255,255,0.06)'
+                e.currentTarget.style.boxShadow = 'none'
+              }}
             >
               <div className="flex items-center gap-2 mb-4">
-                <div
-                  className="w-2 h-2 rounded-full"
-                  style={{ backgroundColor: group.color }}
-                />
+                <div className="w-2 h-2 rounded-full" style={{ background: group.color }} />
                 <h3
-                  className="text-sm font-semibold uppercase tracking-wider"
+                  className="text-xs font-bold uppercase tracking-widest"
                   style={{ color: group.color }}
                 >
                   {group.category}
@@ -85,15 +123,15 @@ export default function Skills() {
                 {group.skills.map((skill, si) => (
                   <motion.span
                     key={skill}
-                    initial={{ opacity: 0, scale: 0.85 }}
+                    initial={{ opacity: 0, scale: 0.8 }}
                     whileInView={{ opacity: 1, scale: 1 }}
                     viewport={{ once: true }}
                     transition={{ duration: 0.3, delay: gi * 0.08 + si * 0.05 }}
-                    whileHover={{ scale: 1.08 }}
-                    className="px-3 py-1.5 rounded-lg text-sm font-medium text-gray-200 cursor-default transition-colors"
+                    whileHover={{ scale: 1.1 }}
+                    className="px-3 py-1.5 text-sm font-medium text-gray-200 rounded-lg cursor-default"
                     style={{
-                      backgroundColor: `${group.color}15`,
-                      border: `1px solid ${group.color}30`,
+                      background: `${group.color}10`,
+                      border: `1px solid ${group.color}25`,
                     }}
                   >
                     {skill}
